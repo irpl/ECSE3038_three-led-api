@@ -38,12 +38,12 @@ async def set_state(request: Request):
 
 @app.get("/api/state")
 async def get_state(request: Request):
-  user = request.headers["X-API-Key"]
+  try:
+    user = request.headers["X-API-Key"]
+  except KeyError:
+    raise HTTPException(status_code=400, detail="No API Key provided")
+  
   state = await db["state"].find_one({"user": user})
   if state == None:
-    return {
-      "light_switch_1": False,
-      "light_switch_2": False,
-      "light_switch_3": False
-    }
+    raise HTTPException(status_code=404, detail="No user found with that username")
   return state
