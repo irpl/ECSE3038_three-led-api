@@ -20,7 +20,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://week4:Lb30oh1KEZTEVypf@cluster0.cklfqkn.mongodb.net/?retryWrites=true&w=majority")
+client = motor.motor_asyncio.AsyncIOMotorClient(os.environ["MONGODB_URL"])
 db = client.switch
 
 pydantic.json.ENCODERS_BY_TYPE[ObjectId]=str
