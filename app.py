@@ -1,5 +1,6 @@
 import os
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
+from typing import List
 import motor.motor_asyncio
 import pydantic
 from bson import ObjectId
@@ -8,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 
 origins = [
-    "https://ecse-three-led.netlify.app",
+  "http://localhost:5500",
+  "https://ecse-three-led.netlify.app",
 ]
 
 app.add_middleware(
@@ -18,20 +20,56 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-client = motor.motor_asyncio.AsyncIOMotorClient(os.environ["MONGODB_URL"])
+client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://week4:Lb30oh1KEZTEVypf@cluster0.cklfqkn.mongodb.net/?retryWrites=true&w=majority")
 db = client.switch
 
 pydantic.json.ENCODERS_BY_TYPE[ObjectId]=str
 
+class ConnectionManager:
+  def __init__(self):
+    self.connections: List[WebSocket] = []
+
+  async def connect(self, websocket: WebSocket):
+    await websocket.accept()
+    self.connections.append(websocket)
+
+  # todo remove websocket from connections list on close
+  async def disconnect(self, websocket: WebSocket):
+    self.connections.remove(websocket)
+
+  async def broadcast(self, data: dict):
+    for connection in self.connections:
+      await connection.send_json(data)
+
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+  await manager.connect(websocket)
+  try:
+    while True:
+      data = await websocket.receive_json()
+      await websocket.send_json(data)
+  except WebSocketDisconnect:
+      await manager.disconnect(websocket)
+
+def helper(data) -> dict:
+    data["_id"] = str(data["_id"])
+    return data
 
 @app.put("/api/state")
 async def set_state(request: Request):
   state_request = await request.json()
-  user = request.headers["X-API-Key"]
+  
+  try:
+    user = request.headers["X-API-Key"]
+  except KeyError:
+    raise HTTPException(status_code=400, detail="No API Key provided")
   
   await db["state"].update_one({"user": user}, {"$set": state_request}, upsert=True)
   
   if updated_state := await db["state"].find_one({"user": user}):
+    await manager.broadcast(helper(updated_state))
     return updated_state
   else: 
     raise HTTPException(status_code=404, detail="Item not found")
