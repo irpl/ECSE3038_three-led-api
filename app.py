@@ -59,8 +59,10 @@ def helper(data) -> dict:
 
 @app.put("/api/state")
 async def set_state(request: Request):
-  state_request = await request.json()
-  
+  try:
+    state_request = await request.json()
+  except:
+    raise HTTPException(status_code=400, detail="No JSON body found")
   try:
     user = request.headers["X-API-Key"]
   except KeyError:
