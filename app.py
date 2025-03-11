@@ -9,6 +9,7 @@ app = FastAPI()
 
 origins = [
     "https://ecse-three-led.netlify.app",
+    "https://ecse-three-led-v2.netlify.app"
 ]
 
 app.add_middleware(
